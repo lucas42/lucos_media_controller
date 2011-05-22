@@ -1,0 +1,161 @@
+<!DOCTYPE html> 
+<html> 
+	<head> 
+	<title>Media Controller (Mobile)</title> 
+	<link rel="stylesheet" href="http://code.jquery.com/mobile/1.0a3/jquery.mobile-1.0a3.min.css" />
+	<script type="text/javascript" src="http://code.jquery.com/jquery-1.4.3.min.js"></script>
+	<script type="text/javascript" src="http://code.jquery.com/mobile/1.0a3/jquery.mobile-1.0a3.min.js"></script>
+		<script type="text/javascript">
+			var manager = "http://l42.ath.cx:8001/";
+			var tapped = false;
+			var volume = 0;
+			var data = new Object();
+			function poll(newdata) {
+				if (newdata.hashcode != null) {
+					data = newdata;
+					$('#next [data-role="content"]').text(data.next.metadata.Title);
+					setNow(data.now.metadata);
+					if (data.isPlaying) $("h1").text("Now Playing");
+					else $("h1").text("Paused");
+					volume = data.volume;
+					$("#vol").animate({top: $(window).height()*(1-volume) + "px"}, 500);
+					tapped = false;
+				}
+				var senddata = new Object();
+				senddata.hashcode = data.hashcode;
+				$.ajax({
+					url: manager+"poll",
+					cache: false,
+					data: senddata,
+					success: poll,
+					error: function () {
+						// If there's a problem with the server, wait 5 seconds and try again.
+						newpoll(poll, 5000);
+					},
+				});
+			}
+			function setNow(metadata) {
+				var now = $("#now span");
+				now.empty();
+				$("<span />").text(metadata.Title).appendTo(now);
+				if (metadata.Artist) $("<span />").text(metadata.Artist).appendTo(now);
+				$("#now img").attr('src', metadata.thumb);
+			}
+			function newpoll(pollfunc, wait) {
+				if (wait == null) wait = 500;
+				setTimeout(function () {pollfunc(new Object());}, wait);
+			}
+		  $().ready(function (){
+			$("#vol").css('top', $(window).height() + "px");
+			$(window).load(function (){
+				newpoll(poll);
+			});
+			$('body').bind("swiperight", function() {
+				$('#next [data-role="content"]').empty();
+				setNow(data.next.metadata);
+				$.get(manager+'next?', {now: data.now.url});
+			}).bind("tap", function(e) {
+				if (tapped) return;
+				tapped = true;
+				if (data.isPlaying) {
+					$("h1").text("Pausing...");
+					$.get(manager+'pause');
+				} else {
+					$("h1").text("Unpausing...");
+					$.get(manager+'play');
+				}
+			});
+			// include: touchmove touchstart touchend ?
+			$('#volcontain').bind("tap", function(e) {
+				if (Math.abs($("#vol").offset().top - e.pageY) < ($(window).height() / 20) ) return;
+				volume = 1 - (e.pageY/$(window).height());
+				$.get(manager+"volume", { volume: volume });
+				$("#vol").animate({top: e.pageY + "px"}, 500);
+				return false;
+			});
+			$(window).bind("orientationchange resize", function() {
+				$("#vol").css('top', $(window).height()*(1-volume) + "px");
+			});
+		  });
+		</script>
+		<style type="text/css">
+			body > div{
+				height: 100%;
+				overflow: hidden;
+			}
+			#now {
+				text-align: center;
+				padding: 0 60px;
+			}
+			#now span {
+				display: block;
+			}
+			#next {
+				bottom: 0;
+				position: fixed;
+				width: 100%;
+			}
+			#next [data-role="content"] {
+				padding-right: 60px;
+			}
+			#now img {
+				display: block;
+				height: 100px;
+				margin: 1em auto;
+				/*-webkit-box-reflect: below 0 -webkit-gradient(linear, left top, left bottom, from(rgba(255, 255, 255, 0)), to(rgba(255, 255, 255, 0.5)), color-stop(0.7, transparent)); */
+			}
+			#vol {
+				position:absolute;
+				top: 100%;
+				height: 100%;
+				width: 100%;
+				-webkit-border-radius: 20px;
+				background-image:
+					-webkit-gradient(linear, 0 0, 100% 0,
+						color-stop(0, rgba(0,0,0,0)),
+						color-stop(0.15, rgba(0,0,0,0.6)),
+						color-stop(0.5, rgba(0,0,0,0)));
+				-webkit-box-shadow:0 2px 2px rgba(0,0,0,0.15);
+				/*-webkit-transition:top 0.5s ease-out; */
+			}
+			#vol.adjust {
+				-webkit-transition:none; 
+				background: red;
+				border: solid blue;
+			}
+			#volcontain {
+				height: 100%;
+				top: 0;
+				right: 0;
+				position: fixed;
+				width: 50px;
+				overflow: hidden
+			}
+		</style>
+</head> 
+<body> 
+
+<div data-role="page" data-theme='a'>
+
+	<div data-role="header">
+		<h1>Loading...</h1>
+	</div><!-- /header -->
+
+	<div data-role="content">
+		<div id='now'>
+			<span></span>
+			<img />
+		</div>
+	</div><!-- /content -->
+	<div id='next'>
+		<div data-role="header">
+			<h2>Next</h2>
+		</div><!-- /header -->
+		<div data-role="content">
+		</div>
+	</div>
+	<div id='volcontain'><div id='vol'></div></div>
+</div><!-- /page -->
+
+</body>
+</html>
