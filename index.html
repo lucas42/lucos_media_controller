@@ -30,7 +30,7 @@
 					$("#playlist ol").empty();
 					for (ii in data.playlist) {
 						var track = $("<li class='track' />").appendTo($('#playlist ol'));
-						$("<h3 />").text(data.playlist[ii].metadata.Title).appendTo(track);
+						$("<h3 />").text(data.playlist[ii].metadata.title).appendTo(track);
 						$("<a>⤠</a>").attr('href', data.playlist[ii].url).attr('target', '_blank').appendTo(track);
 					}
 					playlistHeight();
@@ -44,8 +44,10 @@
 			function setNow(metadata) {
 				var now = $("#now span");
 				now.empty();
-				$("<span />").text(metadata.Title).appendTo(now);
-				if (metadata.Artist) $("<span />").text(metadata.Artist).appendTo(now);
+				if (metadata.exturl) $("<span class='link'/>").text('exturl ⤤').appendTo(now).click(function() {$.get(manager+"openexturl");});
+				if (metadata.editurl) $("<span class='link'/>").text('edit ⤤').appendTo(now).click(function() {$.get(manager+"openediturl");});
+				$("<span />").text(metadata.title).appendTo(now);
+				if (metadata.artist) $("<span />").text(metadata.artist).appendTo(now);
 				$("#now img").attr('src', metadata.thumb);
 			}
 			function newpoll(pollfunc, wait) {
@@ -54,7 +56,7 @@
 			}
 			function newButton( id, text, action) {
 				if (action == null) action = id;
-				$("<input type='button' class='button'/>").click(function() { $.get(manager+action); }).appendTo("#controls").attr('id', id).button().attr('value', text);
+				$("<input type='button' class='button' value='button'/>").click(function() { $.get(manager+action); }).appendTo("#controls").attr('id', id).button().attr('value', text);
 			}
 			function playlistHeight() {
 				$('#playlist').css('height', 0);
@@ -107,6 +109,11 @@
 				margin: 1em auto;
 				-webkit-box-reflect: below 0 -webkit-gradient(linear, left top, left bottom, from(rgba(255, 255, 255, 0)), to(rgba(255, 255, 255, 0.5)), color-stop(0.7, transparent)); 
 			}
+			#now a {
+				float:right;
+				color: #ccf;
+				text-decoration:none;
+			}
 			#controls {
 				background: #404;
 				float: left;
@@ -142,11 +149,19 @@
 			#playlist ol{
 				list-style-type: none;
 			}
+			.link{
+				cursor: pointer;
+				float: right;
+				clear: right;
+			}
+			.link:hover{
+				text-decoration: underline;
+			}
 		</style>
 	</head>
 	<body>
 	
-		<div id='now'><h2>Now Playing</h2><span></span><img /></div>
+		<div id='now'><h2>Now Playing</h2><span></span><img alt='' src='/thumb.png' /></div>
 		<form id='controls'></form>
 		<div id='playlist'><h2>Playlist</h2><ol></ol></div>
 	</body>

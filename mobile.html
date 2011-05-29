@@ -13,7 +13,7 @@
 			function poll(newdata) {
 				if (newdata.hashcode != null) {
 					data = newdata;
-					$('#next [data-role="content"]').text(data.next.metadata.Title);
+					$('#next [data-role="content"]').text(data.next.metadata.title);
 					setNow(data.now.metadata);
 					if (data.isPlaying) $("h1").text("Now Playing");
 					else $("h1").text("Paused");
@@ -35,48 +35,61 @@
 				});
 			}
 			function setNow(metadata) {
-				var now = $("#now span");
-				now.empty();
-				$("<span />").text(metadata.Title).appendTo(now);
-				if (metadata.Artist) $("<span />").text(metadata.Artist).appendTo(now);
+				var now = $("#now .info").empty();
+				$("<span />").text(metadata.title).appendTo(now);
+				if (metadata.artist) $("<span />").text(metadata.artist).appendTo(now);
 				$("#now img").attr('src', metadata.thumb);
+				var links = $("#now .links").empty();
+				if (metadata.exturl) $("<li/>").text('exturl').appendTo(links).bind('tap', function() {$.get(manager+"openexturl"); return false;});
+				if (metadata.editurl) $("<li/>").text('edit').appendTo(links).bind('tap', function() {$.get(manager+"openediturl"); return false;});
 			}
 			function newpoll(pollfunc, wait) {
-				if (wait == null) wait = 500;
+				//if (wait == null) wait = 500;
 				setTimeout(function () {pollfunc(new Object());}, wait);
 			}
-		  $().ready(function (){
-			$("#vol").css('top', $(window).height() + "px");
-			$(window).load(function (){
-				newpoll(poll);
-			});
-			$('body').bind("swiperight", function() {
-				$('#next [data-role="content"]').empty();
-				setNow(data.next.metadata);
-				$.get(manager+'next?', {now: data.now.url});
-			}).bind("tap", function(e) {
-				if (tapped) return;
-				tapped = true;
-				if (data.isPlaying) {
-					$("h1").text("Pausing...");
-					$.get(manager+'pause');
+			
+			function checkorientation() {
+				
+				if(window.innerHeight > window.innerWidth){
+					$("#now").removeClass("landscape").addClass("portrait");
 				} else {
-					$("h1").text("Unpausing...");
-					$.get(manager+'play');
+					$("#now").removeClass("portrait").addClass("landscape");
 				}
+			}
+			$(checkorientation);
+			$(window).ready(function (){
+				$("#vol").css('top', $(window).height() + "px");
+				$(window).load(function (){
+					newpoll(poll);
+				});
+				$('body').bind("swiperight", function() {
+					$('#next [data-role="content"]').empty();
+					setNow(data.next.metadata);
+					$.get(manager+'next?', {now: data.now.url});
+				}).bind("tap", function(e) {
+					if (tapped) return;
+					tapped = true;
+					if (data.isPlaying) {
+						$("h1").text("Pausing...");
+						$.get(manager+'pause');
+					} else {
+						$("h1").text("Unpausing...");
+						$.get(manager+'play');
+					}
+				});
+				// include: touchmove touchstart touchend ?
+				$('#volcontain').bind("tap", function(e) {
+					if (Math.abs($("#vol").offset().top - e.pageY) < ($(window).height() / 20) ) return;
+					volume = 1 - (e.pageY/$(window).height());
+					$.get(manager+"volume", { volume: volume });
+					$("#vol").animate({top: e.pageY + "px"}, 500);
+					return false;
+				});
+				$(window).bind("orientationchange resize", function() {
+					$("#vol").css('top', $(window).height()*(1-volume) + "px");
+					checkorientation();
+				});
 			});
-			// include: touchmove touchstart touchend ?
-			$('#volcontain').bind("tap", function(e) {
-				if (Math.abs($("#vol").offset().top - e.pageY) < ($(window).height() / 20) ) return;
-				volume = 1 - (e.pageY/$(window).height());
-				$.get(manager+"volume", { volume: volume });
-				$("#vol").animate({top: e.pageY + "px"}, 500);
-				return false;
-			});
-			$(window).bind("orientationchange resize", function() {
-				$("#vol").css('top', $(window).height()*(1-volume) + "px");
-			});
-		  });
 		</script>
 		<style type="text/css">
 			body > div{
@@ -87,8 +100,11 @@
 				text-align: center;
 				padding: 0 60px;
 			}
-			#now span {
+			.info span {
 				display: block;
+				overflow: hidden;
+				white-space: nowrap;
+				text-overflow: ellipsis;
 			}
 			#next {
 				bottom: 0;
@@ -97,6 +113,9 @@
 			}
 			#next [data-role="content"] {
 				padding-right: 60px;
+			}
+			[data-role="content"] {
+				overflow: hidden;
 			}
 			#now img {
 				display: block;
@@ -131,6 +150,21 @@
 				width: 50px;
 				overflow: hidden
 			}
+			.links li {
+				font-weight: bold;
+				text-size: 200%;
+				color: yellow;
+				line-height: 200%;
+			}
+			#now.landscape .display{
+				width: 65%;
+				float:right;
+			}
+			#now.landscape .links{
+				display:inline;
+				float:left;
+				margin-left:-60px;
+			}
 		</style>
 </head> 
 <body> 
@@ -143,8 +177,11 @@
 
 	<div data-role="content">
 		<div id='now'>
-			<span></span>
-			<img />
+			<div class='display'>
+				<span class='info'></span>
+				<img />
+			</div>
+			<ul class='links'></ul>
 		</div>
 	</div><!-- /content -->
 	<div id='next'>
