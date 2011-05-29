@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html> 
+<html xmlns="http://www.w3.org/1999/xhtml"> 
+	<head> 
+	<title>LucOs - Media Controller</title> 
+		<script type="text/javascript">
+			//<![CDATA[
+			var manager = "http://l42.ath.cx:8001/";
+			var tapped = false;
+			var volume = 0;
+			var data = new Object();
+			var polling = new Object();
+			function newpoll(url, pollfunc) {
+			
+				// if we're already polling, don't start a new 'un.
+				if (polling[url]) return;
+				getpoll(url, pollfunc);
+				
+				function getpoll(url, pollfunc) {
+					polling[url] = true;
+					var req = new XMLHttpRequest();
+					req.addEventListener('readystatechange', pollresponse);
+					var hashcode = (data[url]) ? data[url].hashcode : ""
+					req.open("GET", manager+url+"?hashcode="+hashcode, true);
+					req.send(null);
+					function pollresponse() {
+						if(req.readyState!=4) return;
+						if (!polling[url]) return;
+						if(req.status!=200) {
+							if (console) console.log("error", req);
+							setTimeout(function () { getpoll(url, pollfunc); }, 5000);
+							return;
+						}
+						var newdata = eval('(' + req.responseText + ')');
+						if (newdata.hashcode) {
+							data[url] = newdata;
+							if (pollfunc) pollfunc();
+						}
+						if (!polling[url]) return;
+						getpoll(url, pollfunc);
+					}
+				}
+			}
+			function stoppoll(url) {
+				polling[url] = false;
+			}
+			function updateManager(method, params) {
+				if (!params) params = {};
+				var qry = [];
+				for(var ii in params) qry.push(ii + "=" + encodeURIComponent(params[ii]));
+				qry.join("&");
+				
+				var req = new XMLHttpRequest();
+				req.open("GET", manager+method+"?"+qry, true);
+				req.send(null);
+			}
+			function mainpoll() {
+				document.body.$controls.$playpause.$txt.nodeValue = (data.poll.isPlaying) ? "▮▮" : "►";
+				document.body.$controls.$next.$txt.nodeValue = (data.poll.next) ? "Next" : "";
+				document.body.$now.$info.$title.$txt.nodeValue=data.poll.now.metadata.title;
+				if (data.poll.now.metadata.artist) document.body.$now.$info.$artist.removeClass('noartist').$txt.nodeValue=data.poll.now.metadata.artist;
+				else document.body.$now.$info.$artist.addClass('noartist').$txt.nodeValue=""
+				document.body.$now.$info.$img.src = data.poll.now.metadata.thumb;
+				document.body.$now.$links.empty();
+				var links = {'exturl':"More Info", 'editurl':"Edit Metadata"};
+				for (label in links) {
+					if (!data.poll.now.metadata[label]) continue;
+					document.body.$now.$links.addEle(label, 'li', links[label])['$'+label].addEventListener('click', openlink, true);
+				}
+				document.body.$next.$title.$txt.nodeValue= 'Next: '+data.poll.next.metadata.title;
+				updatevol();
+			}
+			function playlistpoll() {
+				document.body.$playlist.empty();
+				for (ii in data['poll/playlist'].playlist) {
+					var track = document.body.$playlist.addEle('track'+ii, 'li')['$track'+ii].addClass('track');
+					track.addEle('title', 'h3', data['poll/playlist'].playlist[ii].metadata.title).addEle('link', 'a', "⤠").$link.setAttribute('href', data['poll/playlist'].playlist[ii].url);
+					track.$link.href=data['poll/playlist'].playlist[ii].url;
+					track.$link.setAttribute("target", "_blank");
+				}
+				playlistHeight();
+			}
+			function playlistHeight() {
+				document.body.$playlist.style.height = (self.innerHeight - document.body.$playlist.offsetTop - 30) + 'px';
+			}
+			function stopplaylist() {
+				document.body.$playlist.empty();
+				stoppoll('poll/playlist');
+			}
+			function playpause(e) {
+				if (e) e.stopPropagation();
+				if (data.poll.isPlaying) updateManager("pause");
+				else updateManager("play");
+			}
+			function next(e) {
+				if (e) e.stopPropagation();
+				updateManager("next");
+			}
+			function openlink(e) {
+				if (e) e.stopPropagation();
+				updateManager("open"+this.getAttribute('class'));
+			}
+			function changevol(e) {
+				if (e) e.stopPropagation();
+				e.pageY
+				volume = 1 - (e.pageY/self.innerHeight);
+				updateManager("volume", { volume: volume });
+			}
+			function updatevol() {
+				if (!data.poll) return;
+				var height = self.innerHeight * data.poll.volume;
+				document.body.$volcontain.$vol.style.height = height + "px";
+			}
+			Element.prototype.addEle = function (name, tagname, addtext) {
+				if (!tagname) tagname = "span";
+				var ele;
+				if (tagname == "txt") {
+					if (addtext) ele = document.createTextNode(addtext);
+					else ele = document.createTextNode("");
+					addtext = false;
+				}
+				else ele = document.createElementNS("http://www.w3.org/1999/xhtml", tagname).addClass(name);
+				this.appendChild(ele);
+				if (name) this['$'+name] = ele;
+				if (addtext === true) ele.addEle('txt', 'txt');
+				else if (addtext) ele.addEle('txt', 'txt', addtext);
+				return this;
+			}
+			Element.prototype.addClass = function (newClass){
+				var classes = this.getAttribute("class");
+				if (classes == null)classes = "";
+				else if (classes != "")classes += " ";
+				if (!this.containsClass(newClass)) this.setAttribute("class",classes+newClass);
+				return this;
+			}
+			Element.prototype.removeClass = function (oldClass){
+				var classes = this.getAttribute("class");
+				if (!classes) return this;
+				var re = new RegExp(" *"+oldClass+" *", 'gi');
+				classes = classes.replace(re, ' ');
+				this.setAttribute("class", classes);
+				return this;
+			}
+			Element.prototype.containsClass = function (element, theClass){
+				var classes = this.getAttribute("class");
+				if (!classes) return false;
+				var classes = " "+classes+" ";
+				return (classes.indexOf(" "+theClass+" ")>-1);
+			}
+			Element.prototype.empty = function (){
+				while (this.childNodes[0]) {
+					this.removeChild(this.childNodes[0]);
+				}
+				return this;
+			}
+			Element.prototype.destroy = function (){
+				this.empty().parent.removeChild(this);
+				return this;
+			}
+			function screenOpts () {
+				if (window.outerWidth <= 500) {
+					document.addEventListener('click', playpause, false);
+					stopplaylist();
+				}
+				else {
+					document.removeEventListener('click', playpause, false);
+					newpoll('poll/playlist', playlistpoll);
+					playlistHeight();
+				}
+				updatevol();
+			}
+			window.addEventListener('load', function () { 
+				document.body.addEle('now', 'div').$now.addEle('info', 'div').$info.addEle('title', 'span', true).addEle('artist', 'span', true).addEle('img', 'img').parentNode.addEle('links', 'ul');
+				document.body.addEle('controls', 'div').$controls.addEle('playpause', 'span', true).$playpause.addEventListener('click', playpause, true);
+				document.body.$controls.addEle('next', 'span', true).$next.addEventListener('click', next, true);
+				document.body.addEle('next', 'div').$next.addEle('title', 'span', true).$title.addEventListener('click', next, true);
+				document.body.addEle('playlist', 'ul');
+				document.body.addEle('volcontain', 'div').$volcontain.addEle('vol').addEventListener('click', changevol, true);
+				window.addEventListener('resize', screenOpts, true);
+				setTimeout(function () { screenOpts(); newpoll('poll', mainpoll); }, 600);
+			}, true);
+			//]]>
+		</script>
+		<style type="text/css">
+		body { background: #eee; font-size: 16px; left: 0; right: 0; position: absolute; padding: 0; margin: 0; }
+		.now { text-align: center; background:#400; border-bottom: solid white; color: white; overflow: hidden; padding: 1em; }
+		.now .img { height: 100px; margin: 1em auto;  }
+		.now > .info > * { display: block; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+		.now .links li { list-style-type: none; line-height: 3em; color: #55f; }
+		.controls > *, .links li { cursor: pointer; }
+		.links li:hover { text-decoration: underline; }
+		.controls > * { border: outset; padding: 0.2em 1em; font-weight: bold; }
+		.controls > *:hover { border-color: yellow; }
+		.controls > *:active { border: inset; }
+		.controls { text-align: center; clear: both; padding-top: 0.5em; background:#400; height: 1.8em; display: block; overflow: hidden; }
+		.controls > * { background: white; margin: 1em 0.5em; }
+		.volcontain { width: 60px; position: fixed; right: 0; top: 0; bottom: 0;}
+		.vol { width: 60px; position: fixed; right: 0; bottom: 0;
+				-webkit-border-radius: 20px;
+				-webkit-border-radius: 20px 20px 0 0;
+				background-image:
+					-webkit-gradient(linear, 0 0, 100% 0,
+						color-stop(0, rgba(0,0,0,0)),
+						color-stop(0.15, rgba(0,0,0,1)),
+						color-stop(0.5, rgba(0,0,0,0.5)));
+				-webkit-box-shadow:0 2px 2px rgba(0,0,0,0.15);
+				-webkit-transition:height 0.5s ease-out;
+		}
+		.next .title { background:#400; color: white; text-align: center; display: block; padding: 1em; font-weight: bold; cursor: pointer; }
+		.playlist h3 { display: inline; margin: 0 1em; font-size: smaller;}
+		.playlist { position: fixed; overflow: auto; margin: 0; right: 53px; left: 1em; padding-top: 20px; padding-bottom: 10px;}
+		a { color: #400; font-weight: bold; text-decoration: none;}
+		a:hover { text-decoration: underline; }
+		
+		@media (min-width: 501px) {
+			.now .img { -webkit-box-reflect: below 0 -webkit-gradient(linear, left top, left bottom, from(rgba(255, 255, 255, 0)), to(rgba(255, 255, 255, 0.5)), color-stop(0.7, transparent)); }
+			body { padding: 1em 1em 0 1em; }
+			.next .title { display: none }
+			.now .links li { line-height: 2em; float: right; margin-right: 60px;}
+		}
+		@media (max-width: 500px) {
+			.controls { display: none; }
+		}
+		@media (max-width: 500px) and (min-width: 399px) {
+			.now .img { -webkit-box-reflect: none; }
+			.now > .info { float: right; width: 240px; margin-right: 60px; }
+			.now > .links { float: left; }
+		}
+		@media (max-width: 400px) {
+		}
+		 
+		</style>
+</head> 
+<body />
+</html>
