@@ -27,7 +27,10 @@
 						if(req.readyState!=4) return;
 						if (!polling[url]) return;
 						if(req.status!=200) {
-							if (console) console.log("error", req);
+							if (console) {
+								if (!req.status) console.log("Server Down", req);
+								else console.log("error", req);
+							}
 							setTimeout(function () { getpoll(url, pollfunc); }, 5000);
 							return;
 						}
@@ -55,7 +58,8 @@
 				req.send(null);
 			}
 			function mainpoll() {
-				document.body.$controls.$playpause.$txt.nodeValue = (data.poll.isPlaying) ? "▮▮" : "►";
+				document.body.$status.$txt.nodeValue = (data.poll.isPlaying) ? "Playing" : "Paused";
+				document.body.$controls.$playpause.$txt.nodeValue = (data.poll.isPlaying) ? "❚❚" : "▶";
 				document.body.$controls.$next.$txt.nodeValue = (data.poll.next) ? "Next" : "";
 				document.body.$now.$info.$title.$txt.nodeValue=data.poll.now.metadata.title;
 				if (data.poll.now.metadata.artist) document.body.$now.$info.$artist.removeClass('noartist').$txt.nodeValue=data.poll.now.metadata.artist;
@@ -65,7 +69,11 @@
 				var links = {'exturl':"More Info", 'editurl':"Edit Metadata"};
 				for (label in links) {
 					if (!data.poll.now.metadata[label]) continue;
-					document.body.$now.$links.addEle(label, 'li', links[label])['$'+label].addEventListener('click', openlink, true);
+					var li = document.body.$now.$links.addEle(label, 'li')['$'+label];
+					li.addEle('link', 'a', links[label]).$link.href=data.poll.now.metadata[label];
+					li.$link.setAttribute('target', '_blank');
+					li.addEle('ext', 'span', "➠").$ext.data('link', label).addEventListener('click', openlink, true);
+					
 				}
 				document.body.$next.$title.$txt.nodeValue= 'Next: '+data.poll.next.metadata.title;
 				updatevol();
@@ -74,7 +82,7 @@
 				document.body.$playlist.empty();
 				for (ii in data['poll/playlist'].playlist) {
 					var track = document.body.$playlist.addEle('track'+ii, 'li')['$track'+ii].addClass('track');
-					track.addEle('title', 'h3', data['poll/playlist'].playlist[ii].metadata.title).addEle('link', 'a', "⤠").$link.setAttribute('href', data['poll/playlist'].playlist[ii].url);
+					track.addEle('title', 'h3', data['poll/playlist'].playlist[ii].metadata.title).addEle('link', 'a', "➬").$link.setAttribute('href', data['poll/playlist'].playlist[ii].url);
 					track.$link.href=data['poll/playlist'].playlist[ii].url;
 					track.$link.setAttribute("target", "_blank");
 				}
@@ -89,16 +97,18 @@
 			}
 			function playpause(e) {
 				if (e) e.stopPropagation();
+				document.body.$status.$txt.nodeValue = (data.poll.isPlaying) ? "Pausing…" : "Unpausing…";
 				if (data.poll.isPlaying) updateManager("pause");
 				else updateManager("play");
 			}
 			function next(e) {
 				if (e) e.stopPropagation();
+				document.body.$status.$txt.nodeValue = "Skipping Track…";
 				updateManager("next");
 			}
 			function openlink(e) {
 				if (e) e.stopPropagation();
-				updateManager("open"+this.getAttribute('class'));
+				updateManager("open"+this.data('link'));
 			}
 			function changevol(e) {
 				if (e) e.stopPropagation();
@@ -157,6 +167,12 @@
 				this.empty().parent.removeChild(this);
 				return this;
 			}
+			Element.prototype.data = function (key, val) {
+				key = 'data-'+key;
+				if (!val) return this.getAttribute(key);
+				this.setAttribute(key, val);
+				return this;
+			}
 			function screenOpts () {
 				if (window.outerWidth <= 500) {
 					document.addEventListener('click', playpause, false);
@@ -175,20 +191,43 @@
 				document.body.$controls.addEle('next', 'span', true).$next.addEventListener('click', next, true);
 				document.body.addEle('next', 'div').$next.addEle('title', 'span', true).$title.addEventListener('click', next, true);
 				document.body.addEle('playlist', 'ul');
+				document.body.addEle('status', 'div', 'Loading…');
 				document.body.addEle('volcontain', 'div').$volcontain.addEle('vol').addEventListener('click', changevol, true);
+				document.addEventListener('keyup', function (e) {
+					e.preventDefault();
+					switch (e.keyCode) {
+						case 32: // space
+							playpause(e);
+							break;
+						case 78: //n
+							next(e);
+							break;
+						case 69: //e
+							updateManager("openediturl");
+							break;
+						case 77: //m
+						case 88: //x
+							updateManager("openexturl");
+							break;
+					}
+				}, false);
 				window.addEventListener('resize', screenOpts, true);
+    window.scrollTo(0,100);
 				setTimeout(function () { screenOpts(); newpoll('poll', mainpoll); }, 600);
 			}, true);
 			//]]>
 		</script>
 		<style type="text/css">
 		body { background: #eee; font-size: 16px; left: 0; right: 0; position: absolute; padding: 0; margin: 0; }
-		.now { text-align: center; background:#400; border-bottom: solid white; color: white; overflow: hidden; padding: 1em; }
+		.now { text-align: center; background:#400; border-bottom: solid white; color: white; overflow: hidden; padding: 1em;  }
 		.now .img { height: 100px; margin: 1em auto;  }
 		.now > .info > * { display: block; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-		.now .links li { list-style-type: none; line-height: 3em; color: #55f; }
+		.now .links { margin: 1em auto; }
+		.now .links li { list-style-type: none; line-height: 3em; }
+		.now .links li a { color: #55f; }
+		.now .links li .ext { color: white; padding: 0 0.5em; text-shadow: black 0.1em 0.1em 0.2em }
 		.controls > *, .links li { cursor: pointer; }
-		.links li:hover { text-decoration: underline; }
+		.links li a:hover { text-decoration: underline; }
 		.controls > * { border: outset; padding: 0.2em 1em; font-weight: bold; }
 		.controls > *:hover { border-color: yellow; }
 		.controls > *:active { border: inset; }
@@ -206,17 +245,20 @@
 				-webkit-box-shadow:0 2px 2px rgba(0,0,0,0.15);
 				-webkit-transition:height 0.5s ease-out;
 		}
-		.next .title { background:#400; color: white; text-align: center; display: block; padding: 1em; font-weight: bold; cursor: pointer; }
+		.next .title { background:#400; color: white; text-align: center; display: block; padding: 1em; font-weight: bold; cursor: pointer; padding-right: 60px;}
 		.playlist h3 { display: inline; margin: 0 1em; font-size: smaller;}
 		.playlist { position: fixed; overflow: auto; margin: 0; right: 53px; left: 1em; padding-top: 20px; padding-bottom: 10px;}
 		a { color: #400; font-weight: bold; text-decoration: none;}
 		a:hover { text-decoration: underline; }
+		.status { position: fixed; bottom: 20px; text-align: center; font-weight: bold; right: 60px; left: 60px;  }
 		
 		@media (min-width: 501px) {
-			.now .img { -webkit-box-reflect: below 0 -webkit-gradient(linear, left top, left bottom, from(rgba(255, 255, 255, 0)), to(rgba(255, 255, 255, 0.5)), color-stop(0.7, transparent)); }
+			/*.now .img { -webkit-box-reflect: below 0 -webkit-gradient(linear, left top, left bottom, from(rgba(255, 255, 255, 0)), to(rgba(255, 255, 255, 0.5)), color-stop(0.7, transparent)); }*/
+			.now .img { -webkit-box-reflect: below url(http://l42.ath.cx:8001/thumb.png); }
 			body { padding: 1em 1em 0 1em; }
 			.next .title { display: none }
 			.now .links li { line-height: 2em; float: right; margin-right: 60px;}
+			.status { display: none; }
 		}
 		@media (max-width: 500px) {
 			.controls { display: none; }
@@ -224,7 +266,9 @@
 		@media (max-width: 500px) and (min-width: 399px) {
 			.now .img { -webkit-box-reflect: none; }
 			.now > .info { float: right; width: 240px; margin-right: 60px; }
-			.now > .links { float: left; }
+			.now { padding: 1em 0 0 0; }
+			.now > .links { padding: 0 10px; max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+			.now > .links li { display: block; }
 		}
 		@media (max-width: 400px) {
 		}
